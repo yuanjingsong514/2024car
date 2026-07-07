@@ -1,0 +1,8 @@
+Debug/
+.settings/
+*.out
+*.map
+*.o
+*.d
+*.d_raw
+*.linkInfo.xml
