@@ -87,8 +87,17 @@ int16_t sensor_calc_position(void)
     }
     g_sensor_updated = 0;
 
+    /* 自适应阈值: 取最大值和最小值的中间值 */
+    uint8_t v_min = 255, v_max = 0;
     for (i = 0; i < SENSOR_COUNT; i++) {
-        if (g_sensor_raw[i] < SENSOR_BLACK_THRESHOLD) {
+        if (g_sensor_raw[i] < v_min) v_min = g_sensor_raw[i];
+        if (g_sensor_raw[i] > v_max) v_max = g_sensor_raw[i];
+    }
+    uint8_t threshold = (uint8_t)(((int)v_min + (int)v_max) / 2);
+    if (threshold < 5) threshold = 50;  /* 保底: 变化太小用固定阈值 */
+
+    for (i = 0; i < SENSOR_COUNT; i++) {
+        if (g_sensor_raw[i] < threshold) {
             weighted_sum += (int32_t)i * 100;
             count++;
         }
