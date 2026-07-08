@@ -88,63 +88,6 @@ void line_track_stop(void)
  *===========================================================================*/
 void line_track_run(void)
 {
-    int16_t position;
-    int16_t diff;
-    int16_t left_pwm, right_pwm;
-    int16_t base = LINE_BASE_SPEED;   /* 400 */
-
-    /*--- 第1步: 读传感器 (诊断: 跳过, 用虚拟位置) ---*/
-    /* !!! 诊断模式 — 不调用任何 I2C 函数 !!! */
-    {
-        static int16_t diag_pos = 0;
-        static int8_t  diag_dir = 1;
-        static uint16_t diag_cnt = 0;
-
-        diag_cnt++;
-        if (diag_cnt > 50) {        /* 每250ms切换方向 */
-            diag_cnt = 0;
-            diag_dir = -diag_dir;
-        }
-        diag_pos = diag_dir * 400;  /* 直接在 ±400 之间跳变 */
-
-        position = diag_pos;
-        s_lost_count = 0;           /* 永不丢线 */
-    }
-
-    /*--- 第2步: 丢线处理 ---*/
-    if (position == SENSOR_POSITION_LOST) {
-        s_lost_count++;
-        if (s_lost_count > 200) {
-            /* 持续丢线1秒以上: 尝试半速直行 */
-            motor_set_both(base / 2, base / 2);
-            return;
-        }
-        /* 短暂丢线: 保持上次位置 */
-        position = s_last_position;
-    } else {
-        s_lost_count = 0;
-    }
-    s_last_position = position;
-
-    /*--- 第3步: 整数比例差速 ---*/
-    diff = (int16_t)(((int32_t)position * KP_NUM) >> KP_SHIFT);
-
-    /*--- 第4步: 左右PWM = base ± diff ---*/
-    left_pwm  = base + diff;
-    right_pwm = base - diff;
-
-    /*--- 第5步: 限幅 ---*/
-    if (left_pwm  > LINE_MAX_SPEED)  left_pwm  = LINE_MAX_SPEED;
-    if (left_pwm  < -LINE_MAX_SPEED) left_pwm  = -LINE_MAX_SPEED;
-    if (right_pwm > LINE_MAX_SPEED)  right_pwm = LINE_MAX_SPEED;
-    if (right_pwm < -LINE_MAX_SPEED) right_pwm = -LINE_MAX_SPEED;
-
-    /* 死区 */
-    if (left_pwm  > -LINE_MIN_SPEED && left_pwm  < LINE_MIN_SPEED)
-        left_pwm  = 0;
-    if (right_pwm > -LINE_MIN_SPEED && right_pwm < LINE_MIN_SPEED)
-        right_pwm = 0;
-
-    /*--- 第6步: 输出 ---*/
-    motor_set_both(left_pwm, right_pwm);
+    /* !!! 终极诊断: 硬编码极端差速, 完全绕过所有逻辑 !!! */
+    motor_set_both(700, 100);   /* 左快右慢 → 应明显右转 */
 }
