@@ -8,6 +8,7 @@
 #include "system.h"
 #include "motor.h"
 #include "line_track.h"
+#include "sensor.h"
 #include "uart_pid.h"
 #include <string.h>
 #include <stdlib.h>
@@ -129,17 +130,31 @@ static void parse_command(const char *cmd)
 }
 
 /*===========================================================================
- * UART1 接收中断 — 逐字符接收, 遇 \n 解析
+ * UART1 接收中断 — 传感器数据('#'开头) vs 指令(换行结尾)
  *===========================================================================*/
 void UART1_IRQHandler(void)
 {
     uint8_t ch;
+    static uint8_t in_sensor = 0;
 
     if (DL_UART_getEnabledInterruptStatus(PID_UART_INST,
             DL_UART_INTERRUPT_RX)) {
 
         ch = DL_UART_receiveData(PID_UART_INST);
 
+        /* 传感器帧: '#'开头 → 路由到 sensor_feed_byte */
+        if (ch == '#') {
+            in_sensor = 1;
+            g_rx_idx = 0;  /* 清空指令缓冲 */
+        }
+
+        if (in_sensor) {
+            sensor_feed_byte(ch);
+            if (ch == '!') in_sensor = 0;  /* 帧尾 → 退出传感器模式 */
+            return;
+        }
+
+        /* 指令模式: 换行 → 解析 */
         if (ch == '\n' || ch == '\r') {
             if (g_rx_idx > 0) {
                 g_rx_buf[g_rx_idx] = '\0';

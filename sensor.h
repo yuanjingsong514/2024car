@@ -27,6 +27,7 @@
 #define SENSOR_BLACK_THRESHOLD  50    /* 更敏感: 深黑<50, 浅白>50 */
 
 void    sensor_init(void);
+void    sensor_feed_byte(uint8_t byte);   /* UART ISR调用 */
 int16_t sensor_calc_position(void);
 uint8_t sensor_get_black_count(void);
 uint8_t sensor_get_raw(uint8_t index);
