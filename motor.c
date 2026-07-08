@@ -23,8 +23,9 @@ static void motor_left_set(int16_t speed)
 {
     /* 死区 → 刹车 */
     if (speed > -MOTOR_DEADBAND && speed < MOTOR_DEADBAND) {
-        DL_GPIO_setPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
-        DL_GPIO_setPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
+        /* 滑行 (coast): AIN1=LOW, AIN2=LOW */
+        DL_GPIO_clearPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
+        DL_GPIO_clearPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
         DL_TimerG_setCaptureCompareValue(MotorPWM_Left_INST,
             MOTOR_PWM_PERIOD, DL_TIMER_CC_0_INDEX);
         return;
@@ -35,11 +36,11 @@ static void motor_left_set(int16_t speed)
     if (speed < -MOTOR_PWM_MAX) speed = -MOTOR_PWM_MAX;
 
     if (speed > 0) {
-        /* 前进: AIN1=HIGH, AIN2=LOW */
+        /* 左轮前进 (实测验证): AIN1=HIGH, AIN2=LOW */
         DL_GPIO_setPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
         DL_GPIO_clearPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
     } else {
-        /* 后退: AIN1=LOW, AIN2=HIGH */
+        /* 左轮后退: AIN1=LOW, AIN2=HIGH */
         speed = -speed;
         DL_GPIO_clearPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
         DL_GPIO_setPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
@@ -59,8 +60,9 @@ static void motor_left_set(int16_t speed)
 static void motor_right_set(int16_t speed)
 {
     if (speed > -MOTOR_DEADBAND && speed < MOTOR_DEADBAND) {
-        DL_GPIO_setPins(MOTOR_BIN1_PORT, MOTOR_BIN1_PIN_2_PIN);
-        DL_GPIO_setPins(MOTOR_BIN2_PORT, MOTOR_BIN2_PIN_3_PIN);
+        /* 滑行 (coast): BIN1=LOW, BIN2=LOW */
+        DL_GPIO_clearPins(MOTOR_BIN1_PORT, MOTOR_BIN1_PIN_2_PIN);
+        DL_GPIO_clearPins(MOTOR_BIN2_PORT, MOTOR_BIN2_PIN_3_PIN);
         DL_TimerG_setCaptureCompareValue(MotorPWM_Right_INST,
             MOTOR_PWM_PERIOD, DL_TIMER_CC_0_INDEX);
         return;
@@ -70,7 +72,7 @@ static void motor_right_set(int16_t speed)
     if (speed < -MOTOR_PWM_MAX) speed = -MOTOR_PWM_MAX;
 
     if (speed > 0) {
-        /* 前进: BIN1=HIGH, BIN2=LOW (已实测验证) */
+        /* 右轮前进 (对称安装, 方向与左轮相反): BIN1=HIGH, BIN2=LOW */
         DL_GPIO_setPins(MOTOR_BIN1_PORT, MOTOR_BIN1_PIN_2_PIN);
         DL_GPIO_clearPins(MOTOR_BIN2_PORT, MOTOR_BIN2_PIN_3_PIN);
     } else {
@@ -92,11 +94,11 @@ static void motor_right_set(int16_t speed)
  *===========================================================================*/
 void motor_start(void)
 {
-    /* 先设置刹车状态 */
-    DL_GPIO_setPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
-    DL_GPIO_setPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
-    DL_GPIO_setPins(MOTOR_BIN1_PORT, MOTOR_BIN1_PIN_2_PIN);
-    DL_GPIO_setPins(MOTOR_BIN2_PORT, MOTOR_BIN2_PIN_3_PIN);
+    /* 先设置滑行状态 (coast, 避免 brake 模式异常) */
+    DL_GPIO_clearPins(MOTOR_AIN1_PORT, MOTOR_AIN1_PIN_1_PIN);
+    DL_GPIO_clearPins(MOTOR_AIN2_PORT, MOTOR_AIN2_PIN_0_PIN);
+    DL_GPIO_clearPins(MOTOR_BIN1_PORT, MOTOR_BIN1_PIN_2_PIN);
+    DL_GPIO_clearPins(MOTOR_BIN2_PORT, MOTOR_BIN2_PIN_3_PIN);
 
     /* PWM 占空比 = 0% */
     DL_TimerG_setCaptureCompareValue(MotorPWM_Left_INST,
@@ -117,8 +119,8 @@ void motor_start(void)
  *===========================================================================*/
 void motor_set_both(int16_t left_speed, int16_t right_speed)
 {
-    motor_left_set(left_speed);
-    motor_right_set(right_speed);
+    motor_left_set(left_speed);    /* 左轮=ChA=TIMG6/PA29 */
+    motor_right_set(right_speed);  /* 右轮=ChB=TIMG7/PA7 */
 }
 
 /*===========================================================================
@@ -130,3 +132,6 @@ void motor_stop(void)
     motor_right_set(0);
     DL_GPIO_clearPins(MOTOR_STBY_PORT, MOTOR_STBY_PIN_4_PIN);
 }
+
+void motor_test_chA(int16_t speed) { motor_left_set(speed); }
+void motor_test_chB(int16_t speed) { motor_right_set(speed); }
