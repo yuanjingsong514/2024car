@@ -18,8 +18,7 @@ int main(void)
 
     while (1) {
         /* 读传感器 */
-        int16_t pos = sensor_calc_position();
-        int16_t raw0 = sensor_get_raw(0);   /* 第一个传感器的原始值 */
+        int16_t pos = sensor_calc_position();   /* 第一个传感器的原始值 */
         if (pos == 10000 || pos == -10000) pos = 0;
 
         /* 简单比例控制 */
@@ -38,7 +37,7 @@ int main(void)
 
         /* 每 200ms 发遥测: 位置 左PWM 右PWM */
         tick++;
-        if (tick >= 40) {
+        if (tick >= 200) {   /* 1秒一次 */
             tick = 0;
 
             /* 手动拼字符串, 不用 snprintf */
@@ -66,14 +65,12 @@ int main(void)
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
-            /* 原始传感器值 S0 */
+            /* 全部12路传感器 S=000000000000 (0=白 1=黑) */
             buf[idx++] = ' ';
             buf[idx++] = 'S';
-            buf[idx++] = '0';
             buf[idx++] = '=';
-            if (raw0 >= 100) buf[idx++] = '0' + (raw0 / 100) % 10;
-            if (raw0 >= 10)  buf[idx++] = '0' + (raw0 / 10) % 10;
-            buf[idx++] = '0' + (raw0 % 10);
+            for (uint8_t s = 0; s < 12; s++)
+                buf[idx++] = '0' + (sensor_get_raw(s) ? 1 : 0);
             buf[idx++] = '\r';
             buf[idx++] = '\n';
 
