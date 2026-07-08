@@ -128,6 +128,15 @@ int16_t sensor_calc_position(void)
     if (pos > SENSOR_POSITION_MAX)  pos = SENSOR_POSITION_MAX;
     if (pos < SENSOR_POSITION_MIN)  pos = SENSOR_POSITION_MIN;
 
+    /* !!! 诊断: 强制注入偏移, 验证 sensor→line_track 数据流 !!! */
+    {
+        static uint16_t tick = 0;
+        tick++;
+        if (tick < 100)       pos =  300;   /* 前0.5s: 强制右偏 */
+        else if (tick < 200)  pos = -300;   /* 后0.5s: 强制左偏 */
+        else                  tick = 0;     /* 循环       */
+    }
+
     g_last_position = pos;
     return pos;
 }
