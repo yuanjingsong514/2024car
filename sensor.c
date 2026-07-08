@@ -12,7 +12,7 @@
 static volatile uint8_t g_binary[12];   /* 0=白 1=黑 */
 static volatile uint8_t g_ready = 0;    /* 新数据就绪 */
 static int16_t  g_last_position;        /* 上次位置 */
-volatile uint16_t g_rx_count = 0;       /* RX字节计数 (诊断) */
+/* g_rx_count 定义在 main.c */
 
 static uint8_t s_buf[12];
 static uint8_t s_idx = 0;
