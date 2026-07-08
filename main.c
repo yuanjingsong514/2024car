@@ -10,7 +10,6 @@ int main(void)
 {
     SYSCFG_DL_init();
     motor_start();
-    sensor_init();
     uart_pid_init();
 
     uint16_t tick = 0;
@@ -27,32 +26,23 @@ int main(void)
         if (tick >= 200) {   /* 1秒一次 */
             tick = 0;
 
-            /* 手动拼字符串, 不用 snprintf */
+            /* 手动拼: left right OK */
             char buf[32];
             uint8_t idx = 0;
+            int16_t v;
 
-            /* 位置 (可能有负号) */
-            if (pos < 0) { buf[idx++] = '-'; pos = -pos; }
-            if (pos >= 100) buf[idx++] = '0' + (pos / 100) % 10;
-            if (pos >= 10)  buf[idx++] = '0' + (pos / 10) % 10;
-            buf[idx++] = '0' + (pos % 10);
-            buf[idx++] = ' ';
-
-            /* 左PWM */
-            int16_t v = left;
+            v = left;
             if (v < 0) { buf[idx++] = '-'; v = -v; }
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
             buf[idx++] = ' ';
 
-            /* 右PWM */
             v = right;
             if (v < 0) { buf[idx++] = '-'; v = -v; }
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
-            /* 左PWM 右PWM */
             buf[idx++] = ' ';
             buf[idx++] = 'O';
             buf[idx++] = 'K';
