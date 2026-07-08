@@ -7,6 +7,8 @@
 #include "sensor.h"
 #include "uart_pid.h"
 
+extern volatile uint16_t g_rx_count;
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -65,12 +67,22 @@ int main(void)
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
-            /* 全部12路传感器 S=000000000000 (0=白 1=黑) */
+            /* 全部12路传感器 + RX计数 */
             buf[idx++] = ' ';
             buf[idx++] = 'S';
             buf[idx++] = '=';
             for (uint8_t s = 0; s < 12; s++)
                 buf[idx++] = '0' + (sensor_get_raw(s) ? 1 : 0);
+            buf[idx++] = ' ';
+            buf[idx++] = 'R';
+            buf[idx++] = '=';
+            {   uint16_t r = g_rx_count;
+                if (r >= 10000) buf[idx++] = '0' + (r / 10000) % 10;
+                if (r >= 1000)  buf[idx++] = '0' + (r / 1000) % 10;
+                if (r >= 100)   buf[idx++] = '0' + (r / 100) % 10;
+                if (r >= 10)    buf[idx++] = '0' + (r / 10) % 10;
+                buf[idx++] = '0' + (r % 10);
+            }
             buf[idx++] = '\r';
             buf[idx++] = '\n';
 

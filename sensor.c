@@ -12,6 +12,7 @@
 static volatile uint8_t g_binary[12];   /* 0=白 1=黑 */
 static volatile uint8_t g_ready = 0;    /* 新数据就绪 */
 static int16_t  g_last_position;        /* 上次位置 */
+volatile uint16_t g_rx_count = 0;       /* RX字节计数 (诊断) */
 
 static uint8_t s_buf[12];
 static uint8_t s_idx = 0;
@@ -22,6 +23,8 @@ static uint8_t s_rx   = 0;  /* 0=等'#' 1=收数据 */
  *===========================================================================*/
 void sensor_feed_byte(uint8_t b)
 {
+    g_rx_count++;  /* 诊断: 每收到1字节+1 */
+
     if (!s_rx) {
         if (b == '#') { s_rx = 1; s_idx = 0; }
         return;
