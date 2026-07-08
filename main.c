@@ -41,7 +41,8 @@ int main(void)
         buf[4] = '0' + (r / 1000) % 10; buf[5] = '0' + (r / 100) % 10;
         buf[6] = '0' + (r / 10) % 10; buf[7] = '0' + (r % 10);
         buf[8] = '\r'; buf[9] = '\n';
-        for (int i = 0; i < 10; i++)
-            DL_UART_Main_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
+        int j;
+        for (j = 0; j < 10; j++)
+            DL_UART_Main_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[j]);
     }
 }
