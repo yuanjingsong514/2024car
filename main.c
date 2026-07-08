@@ -10,6 +10,7 @@
 int main(void)
 {
     SYSCFG_DL_init();
+    DL_SYSCTL_disableWDT();   /* 关看门狗, 防止READY重复出现 */
     motor_start();
     sensor_init();
     uart_pid_init();
@@ -17,9 +18,10 @@ int main(void)
     uint16_t tick = 0;
 
     while (1) {
-        /* 读传感器 (丢线时保持直行) */
+        /* 读传感器 */
         int16_t pos = sensor_calc_position();
-        if (pos == 10000 || pos == -10000) pos = 0;  /* 丢线→直行 */
+        uint8_t blk = sensor_get_black_count();
+        if (pos == 10000 || pos == -10000) pos = 0;
 
         /* 简单比例控制 */
         int16_t diff = (pos * 3) >> 2;   /* pos * 3/4 */
@@ -65,6 +67,11 @@ int main(void)
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
+            /* 黑线传感器数 */
+            buf[idx++] = ' ';
+            buf[idx++] = 'B';
+            buf[idx++] = '=';
+            buf[idx++] = '0' + (blk % 10);
             buf[idx++] = '\r';
             buf[idx++] = '\n';
 

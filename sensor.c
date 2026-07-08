@@ -109,3 +109,15 @@ int16_t sensor_calc_position(void)
 }
 
 int16_t sensor_get_last_position(void) { return g_last_position; }
+
+uint8_t sensor_get_black_count(void)
+{
+    uint8_t i, count = 0;
+    for (i = 0; i < 12; i++) {
+        if (g_sensor_data[i] < SENSOR_BLACK_THRESHOLD) count++;
+    }
+    return count;
+}
+
+bool sensor_is_cross(void) { return false; }
+bool sensor_is_lost(void)  { return g_last_position == SENSOR_POSITION_LOST; }
