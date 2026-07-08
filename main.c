@@ -1,6 +1,6 @@
 /**
  * @file    main.c
- * @brief   小车运动 + UART遥测 + 传感器位置
+ * @brief   小车运动 + UART遥测
  */
 #include "system.h"
 #include "motor.h"
@@ -15,18 +15,14 @@ int main(void)
     uint16_t tick = 0;
 
     while (1) {
-        /* 固定前进 — 先验证运动+遥测, 传感器稍后接入 */
         int16_t left  = 200;
         int16_t right = 200;
-
         motor_set_both(left, right);
 
-        /* 每 200ms 发遥测: 位置 左PWM 右PWM */
         tick++;
-        if (tick >= 200) {   /* 1秒一次 */
+        if (tick >= 200) {
             tick = 0;
 
-            /* 手动拼: left right OK */
             char buf[32];
             uint8_t idx = 0;
             int16_t v;
@@ -53,6 +49,6 @@ int main(void)
                 DL_UART_Main_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
         }
 
-        delay_cycles(CPUCLK_FREQ / 200);  /* 5ms */
+        delay_cycles(CPUCLK_FREQ / 200);
     }
 }
