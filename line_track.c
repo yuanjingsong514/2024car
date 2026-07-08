@@ -94,7 +94,24 @@ void line_track_run(void)
     int16_t base = LINE_BASE_SPEED;   /* 400 */
 
     /*--- 第1步: 读传感器 ---*/
-    position = sensor_calc_position();
+    /* !!! 诊断模式: 用硬编码振荡位置验证电机控制 !!! */
+    {
+        static int16_t diag_pos = 0;
+        static int8_t  diag_dir = 1;
+        static uint16_t diag_cnt = 0;
+
+        diag_cnt++;
+        if (diag_cnt > 100) {       /* 每500ms反转 */
+            diag_cnt = 0;
+            diag_dir = -diag_dir;
+        }
+        diag_pos += diag_dir * 10;  /* 位置缓慢扫描 */
+        if (diag_pos >  500) diag_pos =  500;
+        if (diag_pos < -500) diag_pos = -500;
+
+        position = diag_pos;        /* 用诊断值替代传感器 */
+        (void)sensor_calc_position(); /* 仍调用传感器但不使用 */
+    }
 
     /*--- 第2步: 丢线处理 ---*/
     if (position == SENSOR_POSITION_LOST) {
