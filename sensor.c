@@ -74,39 +74,56 @@ void sensor_init(void)
 }
 
 /*===========================================================================
- * 计算黑线位置 — 每5ms调用一次, 每次读一帧
+ * 计算黑线位置 — 参照 STM32 成功项目加权求和算法
+ *
+ * 改进:
+ *   1. 一次调用连续读多帧直到凑齐 '#' + '!'
+ *   2. 二值化 + 加权求和 (对齐参考项目 tracker.c)
+ *   3. 12路权重对称分布
  *===========================================================================*/
 int16_t sensor_calc_position(void)
 {
-    int32_t sum_left = 0, sum_right = 0;
-    int16_t pos;
-    uint8_t i;
+    int16_t  sum = 0;
+    int16_t  pos;
+    uint8_t  i;
+    uint8_t  attempt;
 
-    /* 每次调用读一帧, 带超时保护 */
-    if (!read_iic()) {
-        /* I2C超时: 递增错误计数, 返回上次位置 */
-        g_i2c_error_count++;
-        if (g_i2c_error_count > 100) {
-            /* 连续超时100次(500ms) → 报告丢线 */
-            g_last_position = SENSOR_POSITION_LOST;
+    /*--- 连续读帧, 直到凑齐两帧或超时 ---*/
+    g_data_ready = 0;
+    for (attempt = 0; attempt < 4; attempt++) {
+        if (!read_iic()) {
+            g_i2c_error_count++;
+            if (g_i2c_error_count > 100) {
+                g_last_position = SENSOR_POSITION_LOST;
+            }
+            return g_last_position;
         }
-        return g_last_position;
+        if (g_data_ready == 0x03) break;  /* 两帧都收到了 */
     }
-    g_i2c_error_count = 0;   /* I2C正常, 清零错误计数 */
 
     if (g_data_ready != 0x03) {
-        return g_last_position;   /* 数据不完整 */
+        /* 4次都没凑齐 → 数据异常 */
+        return g_last_position;
     }
-    g_data_ready = 0;
+    g_i2c_error_count = 0;
 
-    /* 左半 vs 右半比大小 */
-    for (i = 0; i < 6; i++)
-        sum_left  += g_sensor_data[i];       /* S0~S5 */
-    for (i = 6; i < 12; i++)
-        sum_right += g_sensor_data[i];       /* S6~S11 */
+    /*--- 加权求和 (对齐参考项目): 黑线=低值, 阈值以下视为压线 ---*/
+    /* 权重: S0(左端)=-6 ... S5=-1,  S6=+1 ... S11(右端)=+6 */
+    static const int8_t weight[12] = {-6, -5, -4, -3, -2, -1,
+                                        1,  2,  3,  4,  5,  6};
 
-    pos = (int16_t)((sum_left - sum_right) / 4);
-    /* 正值=左半更黑=线在左, 车应左转 */
+    for (i = 0; i < 12; i++) {
+        if (g_sensor_data[i] < SENSOR_BLACK_THRESHOLD) {
+            sum += weight[i];
+        }
+    }
+
+    /* sum>0 → 线在右 → 右转 (左轮加速)
+     * sum<0 → 线在左 → 左转 (右轮加速)
+     *
+     * 放大到 [-550, +550] 范围: sum×50 (sum范围约±21, ×50≈±1050, 限幅到±550)
+     */
+    pos = sum * 50;
 
     if (pos > SENSOR_POSITION_MAX)  pos = SENSOR_POSITION_MAX;
     if (pos < SENSOR_POSITION_MIN)  pos = SENSOR_POSITION_MIN;
