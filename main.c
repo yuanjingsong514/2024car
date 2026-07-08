@@ -7,7 +7,6 @@
 #include "motor.h"
 #include "sensor.h"
 #include "line_track.h"
-#include "uart_pid.h"
 #include <stdio.h>
 
 /*===========================================================================
@@ -29,8 +28,8 @@ int main(void)
     encoder_interrupt_init();
     __enable_irq();
 
-    /*--- UART 初始化 (115200, PB6=TX) ---*/
-    uart_pid_init();
+    /*--- UART TX 初始化 (不发READY, 不启用RX中断) ---*/
+    /* 硬件已由 SYSCFG_DL_PID_UART_init() 配置好, 直接发送即可 */
 
     /*--- 循迹初始化 ---*/
     line_track_init();
@@ -41,9 +40,9 @@ int main(void)
     while (1) {
         line_track_run();
 
-        /* 每 100ms (20次×5ms) 发送一次遥测 */
+        /* 每 25ms (5次×5ms) 发送一次遥测 */
         tick++;
-        if (tick >= 20) {
+        if (tick >= 5) {
             tick = 0;
             char buf[64];
             int len = snprintf(buf, sizeof(buf),
