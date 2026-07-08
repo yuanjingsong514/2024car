@@ -1,51 +1,75 @@
 /**
  * @file    main.c
- * @brief   小车运动 + UART遥测
+ * @brief   小车运动 + UART遥测 + 传感器位置
  */
 #include "system.h"
 #include "motor.h"
+#include "sensor.h"
 #include "uart_pid.h"
 
 int main(void)
 {
     SYSCFG_DL_init();
     motor_start();
-
-    /* UART 初始化 (uart_pid.c已验证能输出READY) */
+    sensor_init();
     uart_pid_init();
 
-    uint8_t  phase = 0;
-    uint16_t tick  = 0;
-    uint16_t phase_timer = 0;
+    uint16_t tick = 0;
 
     while (1) {
-        int16_t left, right;
-        const char *name;
+        /* 读传感器 (丢线时保持直行) */
+        int16_t pos = sensor_calc_position();
+        if (pos == 10000 || pos == -10000) pos = 0;  /* 丢线→直行 */
 
-        switch (phase) {
-            case 0: left = 200; right = 200; name = "FWD";   break;
-            case 1: left = 400; right =   0; name = "RIGHT"; break;
-            case 2: left =   0; right = 400; name = "LEFT";  break;
-        }
+        /* 简单比例控制 */
+        int16_t diff = (pos * 3) >> 2;   /* pos * 3/4 */
+        int16_t base = 200;
+        int16_t left  = base + diff;
+        int16_t right = base - diff;
+
+        /* 限幅 */
+        if (left  > 800) left  = 800;
+        if (left  < -800) left  = -800;
+        if (right > 800) right = 800;
+        if (right < -800) right = -800;
 
         motor_set_both(left, right);
 
-        /* 每 2 秒切换阶段 */
-        phase_timer++;
-        if (phase_timer >= 400) {   /* 400 × 5ms = 2s */
-            phase_timer = 0;
-            phase = (phase + 1) % 3;
-        }
-
-        /* 每 100ms 发遥测 */
+        /* 每 200ms 发遥测: 位置 左PWM 右PWM */
         tick++;
-        if (tick >= 20) {
+        if (tick >= 40) {
             tick = 0;
-            char c;
-            for (const char *p = name; (c = *p); p++)
-                DL_UART_transmitDataBlocking(PID_UART_INST, (uint8_t)c);
-            DL_UART_transmitDataBlocking(PID_UART_INST, '\r');
-            DL_UART_transmitDataBlocking(PID_UART_INST, '\n');
+
+            /* 手动拼字符串, 不用 snprintf */
+            char buf[32];
+            uint8_t idx = 0;
+
+            /* 位置 (可能有负号) */
+            if (pos < 0) { buf[idx++] = '-'; pos = -pos; }
+            if (pos >= 100) buf[idx++] = '0' + (pos / 100) % 10;
+            if (pos >= 10)  buf[idx++] = '0' + (pos / 10) % 10;
+            buf[idx++] = '0' + (pos % 10);
+            buf[idx++] = ' ';
+
+            /* 左PWM */
+            int16_t v = left;
+            if (v < 0) { buf[idx++] = '-'; v = -v; }
+            if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
+            if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
+            buf[idx++] = '0' + (v % 10);
+            buf[idx++] = ' ';
+
+            /* 右PWM */
+            v = right;
+            if (v < 0) { buf[idx++] = '-'; v = -v; }
+            if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
+            if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
+            buf[idx++] = '0' + (v % 10);
+            buf[idx++] = '\r';
+            buf[idx++] = '\n';
+
+            for (uint8_t i = 0; i < idx; i++)
+                DL_UART_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
         }
 
         delay_cycles(CPUCLK_FREQ / 200);  /* 5ms */
