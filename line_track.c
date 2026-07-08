@@ -214,10 +214,9 @@ void line_track_run(void)
      * 第3步: 计算左右目标速度 (PWM单位)
      *=================================================================*/
     if (t->state == TRACK_STATE_LOST) {
-        /* 丢线: 减速并以小差速沿最后方向转圈找线 */
-        float lost_diff = (position > 0) ? 200.0f : -200.0f;
-        left_target  = 200.0f + lost_diff;
-        right_target = 200.0f - lost_diff;
+        /* 丢线: 减速直行 (不转圈, 靠惯性找回线) */
+        left_target  = (float)t->base_speed * 0.5f;  /* 半速直行 */
+        right_target = (float)t->base_speed * 0.5f;
     } else {
         left_target  = (float)t->base_speed + pos_output;
         right_target = (float)t->base_speed - pos_output;
