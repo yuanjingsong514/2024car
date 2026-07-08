@@ -10,6 +10,11 @@
 #include "sensor.h"
 #include "motor.h"
 
+/* 遥测变量 (main.c 定义, 此处更新) */
+extern volatile int16_t g_telem_pos;
+extern volatile int16_t g_telem_left;
+extern volatile int16_t g_telem_right;
+
 /*===========================================================================
  * 比例控制参数
  *   diff = position * KP_NUM / 2^KP_SHIFT
@@ -83,6 +88,11 @@ void line_track_run(void)
 
     if (left_pwm  > -LINE_MIN_SPEED && left_pwm  < LINE_MIN_SPEED) left_pwm  = 0;
     if (right_pwm > -LINE_MIN_SPEED && right_pwm < LINE_MIN_SPEED) right_pwm = 0;
+
+    /*--- 更新遥测 ---*/
+    g_telem_pos   = position;
+    g_telem_left  = left_pwm;
+    g_telem_right = right_pwm;
 
     /*--- 输出 ---*/
     motor_set_both(left_pwm, right_pwm);

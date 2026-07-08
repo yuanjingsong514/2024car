@@ -1,35 +1,61 @@
 /**
  * @file    main.c
- * @brief   循迹小车主程序 — MSPM0G3507 + TB6612 + 12路灰度
- *
- * 引脚由 SysConfig 统一管理
+ * @brief   循迹小车 — MSPM0G3507 + 传感器 + UART遥测
  */
 
 #include "system.h"
 #include "motor.h"
 #include "sensor.h"
 #include "line_track.h"
+#include "uart_pid.h"
+#include <stdio.h>
 
 /*===========================================================================
- * 主函数 — 直接进入循迹, 无自检, 无定时器依赖
+ * 遥测用的全局变量 (line_track_run 更新, main 循环发送)
+ *===========================================================================*/
+volatile int16_t g_telem_pos   = 0;
+volatile int16_t g_telem_left  = 0;
+volatile int16_t g_telem_right = 0;
+
+/*===========================================================================
+ * 主函数
  *===========================================================================*/
 int main(void)
 {
-    /*--- 第1步: 硬件初始化 ---*/
+    /*--- 硬件初始化 ---*/
     SYSCFG_DL_init();
     motor_start();
     sensor_init();
-
-    /*--- 第2步: 编码器中断 (用于测速, 不影响主循环) ---*/
     encoder_interrupt_init();
     __enable_irq();
 
-    /*--- 第3步: 循迹初始化 ---*/
+    /*--- UART 初始化 (115200, PB6=TX) ---*/
+    uart_pid_init();
+
+    /*--- 循迹初始化 ---*/
     line_track_init();
 
-    /*--- 第4步: 主循环 — 传感器循迹 ---*/
+    /*--- 主循环 ---*/
+    uint16_t tick = 0;
+
     while (1) {
         line_track_run();
+
+        /* 每 100ms (20次×5ms) 发送一次遥测 */
+        tick++;
+        if (tick >= 20) {
+            tick = 0;
+            char buf[64];
+            int len = snprintf(buf, sizeof(buf),
+                "P=%d L=%d R=%d\r\n",
+                (int)g_telem_pos,
+                (int)g_telem_left,
+                (int)g_telem_right);
+            for (int i = 0; i < len; i++) {
+                DL_UART_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
+            }
+        }
+
         delay_cycles(CPUCLK_FREQ / 200);   /* 5ms */
     }
 }
