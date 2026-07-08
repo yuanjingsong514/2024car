@@ -19,10 +19,8 @@ static uint8_t g_rx_idx = 0;
  *===========================================================================*/
 void uart_pid_init(void)
 {
-    /* 使能 UART RX 中断 (外设级 + NVIC) */
-    DL_UART_Main_enableInterrupt(PID_UART_INST, DL_UART_MAIN_INTERRUPT_RX);
-    NVIC_ClearPendingIRQ(PID_UART_INST_INT_IRQN);
-    NVIC_EnableIRQ(PID_UART_INST_INT_IRQN);
+    /* 暂不启用 RX 中断 — 先用遥测确认小车运动正常 */
+    g_rx_idx = 0;
     g_rx_idx = 0;
 
     /* 启动消息 */

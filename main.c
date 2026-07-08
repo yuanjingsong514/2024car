@@ -4,10 +4,7 @@
  */
 #include "system.h"
 #include "motor.h"
-#include "sensor.h"
 #include "uart_pid.h"
-
-extern volatile uint16_t g_rx_count;
 
 int main(void)
 {
@@ -19,21 +16,9 @@ int main(void)
     uint16_t tick = 0;
 
     while (1) {
-        /* 读传感器 */
-        int16_t pos = sensor_calc_position();   /* 第一个传感器的原始值 */
-        if (pos == 10000 || pos == -10000) pos = 0;
-
-        /* 简单比例控制 */
-        int16_t diff = (pos * 3) >> 2;   /* pos * 3/4 */
-        int16_t base = 200;
-        int16_t left  = base + diff;
-        int16_t right = base - diff;
-
-        /* 限幅 */
-        if (left  > 800) left  = 800;
-        if (left  < -800) left  = -800;
-        if (right > 800) right = 800;
-        if (right < -800) right = -800;
+        /* 固定前进 — 先验证运动+遥测, 传感器稍后接入 */
+        int16_t left  = 200;
+        int16_t right = 200;
 
         motor_set_both(left, right);
 
@@ -67,22 +52,10 @@ int main(void)
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
-            /* 全部12路传感器 + RX计数 */
+            /* 左PWM 右PWM */
             buf[idx++] = ' ';
-            buf[idx++] = 'S';
-            buf[idx++] = '=';
-            for (uint8_t s = 0; s < 12; s++)
-                buf[idx++] = '0' + (sensor_get_raw(s) ? 1 : 0);
-            buf[idx++] = ' ';
-            buf[idx++] = 'R';
-            buf[idx++] = '=';
-            {   uint16_t r = g_rx_count;
-                if (r >= 10000) buf[idx++] = '0' + (r / 10000) % 10;
-                if (r >= 1000)  buf[idx++] = '0' + (r / 1000) % 10;
-                if (r >= 100)   buf[idx++] = '0' + (r / 100) % 10;
-                if (r >= 10)    buf[idx++] = '0' + (r / 10) % 10;
-                buf[idx++] = '0' + (r % 10);
-            }
+            buf[idx++] = 'O';
+            buf[idx++] = 'K';
             buf[idx++] = '\r';
             buf[idx++] = '\n';
 
