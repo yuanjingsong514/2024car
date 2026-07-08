@@ -29,6 +29,7 @@
 void    sensor_init(void);
 int16_t sensor_calc_position(void);
 uint8_t sensor_get_black_count(void);
+uint8_t sensor_get_raw(uint8_t index);
 bool    sensor_is_cross(void);
 bool    sensor_is_lost(void);
 int16_t sensor_get_last_position(void);

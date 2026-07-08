@@ -20,6 +20,7 @@ int main(void)
         /* 读传感器 */
         int16_t pos = sensor_calc_position();
         uint8_t blk = sensor_get_black_count();
+        int16_t raw0 = sensor_get_raw(0);   /* 第一个传感器的原始值 */
         if (pos == 10000 || pos == -10000) pos = 0;
 
         /* 简单比例控制 */
@@ -66,11 +67,14 @@ int main(void)
             if (v >= 100) buf[idx++] = '0' + (v / 100) % 10;
             if (v >= 10)  buf[idx++] = '0' + (v / 10) % 10;
             buf[idx++] = '0' + (v % 10);
-            /* 黑线传感器数 */
+            /* 原始传感器值 S0 */
             buf[idx++] = ' ';
-            buf[idx++] = 'B';
+            buf[idx++] = 'S';
+            buf[idx++] = '0';
             buf[idx++] = '=';
-            buf[idx++] = '0' + (blk % 10);
+            if (raw0 >= 100) buf[idx++] = '0' + (raw0 / 100) % 10;
+            if (raw0 >= 10)  buf[idx++] = '0' + (raw0 / 10) % 10;
+            buf[idx++] = '0' + (raw0 % 10);
             buf[idx++] = '\r';
             buf[idx++] = '\n';
 
