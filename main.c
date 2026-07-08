@@ -19,7 +19,6 @@ int main(void)
     while (1) {
         /* 读传感器 */
         int16_t pos = sensor_calc_position();
-        uint8_t blk = sensor_get_black_count();
         int16_t raw0 = sensor_get_raw(0);   /* 第一个传感器的原始值 */
         if (pos == 10000 || pos == -10000) pos = 0;
 
@@ -79,7 +78,7 @@ int main(void)
             buf[idx++] = '\n';
 
             for (uint8_t i = 0; i < idx; i++)
-                DL_UART_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
+                DL_UART_Main_transmitDataBlocking(PID_UART_INST, (uint8_t)buf[i]);
         }
 
         delay_cycles(CPUCLK_FREQ / 200);  /* 5ms */

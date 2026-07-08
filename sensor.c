@@ -11,6 +11,7 @@
 
 static volatile uint8_t g_binary[12];   /* 0=白 1=黑 */
 static volatile uint8_t g_ready = 0;    /* 新数据就绪 */
+static int16_t  g_last_position;        /* 上次位置 */
 
 static uint8_t s_buf[12];
 static uint8_t s_idx = 0;
@@ -85,8 +86,6 @@ int16_t sensor_calc_position(void)
 /*===========================================================================
  * 辅助函数
  *===========================================================================*/
-static int16_t g_last_position;
-
 uint8_t sensor_get_black_count(void)
 {
     uint8_t i, n = 0;
