@@ -10,7 +10,6 @@
 int main(void)
 {
     SYSCFG_DL_init();
-    DL_SYSCTL_disableWDT();   /* 关看门狗, 防止READY重复出现 */
     motor_start();
     sensor_init();
     uart_pid_init();
