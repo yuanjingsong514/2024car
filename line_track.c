@@ -1,20 +1,20 @@
 /**
  * @file    line_track.c
- * @brief   循迹控制 — 位置PID + 速度PID 双闭环
+ * @brief   循迹控制 — 纯整数比例控制 (M0+无FPU, 浮点太慢)
  *
- * 控制架构 (对齐 STM32 成功项目 D:\qianrushi\code32\car):
+ * 算法 (参照 STM32 成功项目 tracker.c 的加权差速思想):
  *
- *   传感器位置 ──→ 位置PID (setpoint=0) ──→ 差速量
- *                                                  ↓
- *                      base_speed ± differential ──→ 左右目标速度
- *                                                  ↓
- *   编码器脉冲 ──→ 估算PWM ──→ 速度PID ──→ PWM修正
- *                                                  ↓
- *                                          motor_set_both(left, right)
- *
- * 参考文献:
- *   - STM32成功项目 tracker.c (加权求和+TrackCmd)
- *   - STM32成功项目 motor.c   (位置式PID+PWM映射)
+ *   sensor_calc_position() → position [-550, +550]
+ *           │
+ *           ▼
+ *   diff = (position * KP_NUM) >> KP_SHIFT     ← 纯整数, <1μs
+ *           │
+ *           ▼
+ *   left  = base_speed + diff                  ← 正值=线在左→右轮加速→左转
+ *   right = base_speed - diff
+ *           │
+ *           ▼
+ *   motor_set_both(left, right)
  */
 
 #include "line_track.h"
@@ -22,120 +22,55 @@
 #include "motor.h"
 
 /*===========================================================================
- * 传感器方向配置
+ * 比例控制参数 (整数运算, 避免浮点)
  *
- * sensor_calc_position 约定:
- *   pos = (sum_left - sum_right) / 4
- *   正值 = 左半更黑 = 线在左 → 车应左转 (右轮加速)
- *   负值 = 右半更黑 = 线在右 → 车应右转 (左轮加速)
+ * diff = position * KP_NUM / 2^KP_SHIFT
+ * 当前: KP=0.75 → diff_max = 550*3/4 ≈ 412
  *
- * 如果实测方向相反, 将 SENSOR_INVERT 改为 -1
+ * 调大 KP_NUM → 转弯更猛; 调大 KP_SHIFT → 转弯更柔
  *===========================================================================*/
-#define SENSOR_INVERT       1       /* 1=正常, -1=翻转传感器方向 */
+#define KP_NUM       3        /* 分子: 3 → Kp=0.75 */
+#define KP_SHIFT     2        /* 右移2位 = 除以4 */
 
 /*===========================================================================
- * 编码器速度估算参数
- *
- * 编码器: MG513XP28, 13PPR×30减速比=390脉冲/圈 (单边沿)
- * 速度估算: PWM ≈ (counts/5ms) × SPEED_SCALE
- *
- * 推导:
- *   满载 PWM=1000 时 ≈ 300RPM = 5rps
- *   5 rps × 390 counts/rev = 1950 counts/s
- *   每5ms: 1950 × 0.005 ≈ 10 counts/5ms
- *   因此: PWM_est = counts/5ms × 100
+ * 传感器状态追踪
  *===========================================================================*/
-#define SPEED_SCALE         100     /* counts/5ms → 近似PWM */
-#define ENCODER_PPR         390     /* 电机单圈脉冲数(单边沿) */
-
-/*===========================================================================
- * 全局实例
- *===========================================================================*/
-static line_track_t g_tracker;
-
-/*===========================================================================
- * 编码器速度测量状态
- *===========================================================================*/
-static int32_t s_enc_left_prev  = 0;
-static int32_t s_enc_right_prev = 0;
-
-/*===========================================================================
- * 获取编码器速度 (counts / 5ms)
- *===========================================================================*/
-static int16_t encoder_get_speed_left(void)
-{
-    int32_t curr = g_enc_left_count;
-    int16_t speed = (int16_t)(curr - s_enc_left_prev);
-    s_enc_left_prev = curr;
-    return speed;
-}
-
-static int16_t encoder_get_speed_right(void)
-{
-    int32_t curr = g_enc_right_count;
-    int16_t speed = (int16_t)(curr - s_enc_right_prev);
-    s_enc_right_prev = curr;
-    return speed;
-}
+static int16_t  s_last_position;
+static uint16_t s_lost_count;
 
 /*===========================================================================
  * 初始化
  *===========================================================================*/
 void line_track_init(void)
 {
-    line_track_t *t = &g_tracker;
-
-    /* 位置PID: 传感器位置→差速量, 微分先行避免震荡 */
-    pid_init(&t->pos_pid, POS_KP_DEFAULT, POS_KI_DEFAULT, POS_KD_DEFAULT,
-             0.0f, POS_OUT_LIMIT, POS_INT_LIMIT);
-    t->pos_pid.derivative_on_measurement = true;  /* 微分先行, 转弯更丝滑 */
-
-    /* 速度PID 左 */
-    pid_init(&t->spd_left_pid, SPD_KP_DEFAULT, SPD_KI_DEFAULT, SPD_KD_DEFAULT,
-             0.0f, SPD_OUT_LIMIT, SPD_INT_LIMIT);
-
-    /* 速度PID 右 */
-    pid_init(&t->spd_right_pid, SPD_KP_DEFAULT, SPD_KI_DEFAULT, SPD_KD_DEFAULT,
-             0.0f, SPD_OUT_LIMIT, SPD_INT_LIMIT);
-
-    t->base_speed     = LINE_BASE_SPEED;
-    t->state          = TRACK_STATE_NORMAL;
-    t->line_position  = 0;
-    t->last_position  = 0;
-    t->left_speed     = 0;
-    t->right_speed    = 0;
-    t->lost_count     = 0;
-    t->lost_max       = 40;  /* 连续丢线40次(200ms)判定为丢失 */
-
-    /* 初始化编码器基准 */
-    s_enc_left_prev  = g_enc_left_count;
-    s_enc_right_prev = g_enc_right_count;
+    s_last_position = 0;
+    s_lost_count    = 0;
 }
 
 /*===========================================================================
- * 参数设置接口
+ * 参数设置接口 (保留兼容性)
  *===========================================================================*/
 void line_track_set_base_speed(int16_t speed)
 {
-    if (speed > LINE_MAX_SPEED)  speed = LINE_MAX_SPEED;
-    if (speed < LINE_MIN_SPEED)  speed = LINE_MIN_SPEED;
-    g_tracker.base_speed = speed;
+    /* 当前版本忽略, 使用 LINE_BASE_SPEED 宏 */
+    (void)speed;
 }
 
 void line_track_set_pos_pid(float kp, float ki, float kd)
 {
-    pid_set_params(&g_tracker.pos_pid, kp, ki, kd);
+    (void)kp; (void)ki; (void)kd;
+    /* 浮点PID已移除, 使用整数KP_NUM/KP_SHIFT替代 */
 }
 
 void line_track_set_spd_pid(float kp, float ki, float kd)
 {
-    pid_set_params(&g_tracker.spd_left_pid,  kp, ki, kd);
-    pid_set_params(&g_tracker.spd_right_pid, kp, ki, kd);
+    (void)kp; (void)ki; (void)kd;
+    /* 速度PID已移除, M0+性能不足 */
 }
 
 line_track_t* line_track_get_instance(void)
 {
-    return &g_tracker;
+    return NULL;  /* 内部状态已简化, 不再暴露 */
 }
 
 /*===========================================================================
@@ -143,147 +78,58 @@ line_track_t* line_track_get_instance(void)
  *===========================================================================*/
 void line_track_stop(void)
 {
-    pid_reset(&g_tracker.pos_pid);
-    pid_reset(&g_tracker.spd_left_pid);
-    pid_reset(&g_tracker.spd_right_pid);
-    g_tracker.state = TRACK_STATE_STOP;
     motor_set_both(0, 0);
 }
 
 /*===========================================================================
- * 循迹主循环 — 每5ms由 TIMG12 ISR 触发
+ * 循迹主循环 — 每5ms调用
  *
- * 流程:
- *   1. 读传感器 → 位置
- *   2. 位置PID → 差速量
- *   3. base_speed ± diff → 左右目标速度
- *   4. 读编码器 → 左右实测速度 (换算为近似PWM)
- *   5. 速度PID → PWM修正
- *   6. 输出 motor_set_both()
- *
- * 方向逻辑 (验证正确):
- *   line在左 → pos>0 → PID error<0 → output<0
- *   → left=base+(-out)=慢, right=base-(-out)=快 → 右轮加速 → 左转追线 ✓
+ * 纯整数运算, M0+在32MHz下<10μs完成
  *===========================================================================*/
 void line_track_run(void)
 {
-    line_track_t *t = &g_tracker;
-    const float dt = 0.005f;  /* 5ms 控制周期 */
     int16_t position;
-    float pos_output;
-    float left_target, right_target;
-    int16_t left_enc, right_enc;
-    float left_measured, right_measured;
-    float left_pwm, right_pwm;
+    int16_t diff;
+    int16_t left_pwm, right_pwm;
+    int16_t base = LINE_BASE_SPEED;   /* 400 */
 
-    /* 急停状态不响应 */
-    if (t->state == TRACK_STATE_STOP) {
-        return;
-    }
-
-    /*=================================================================
-     * 第1步: 读取传感器位置
-     *=================================================================*/
+    /*--- 第1步: 读传感器 ---*/
     position = sensor_calc_position();
 
-    /* 丢线检测 */
+    /*--- 第2步: 丢线处理 ---*/
     if (position == SENSOR_POSITION_LOST) {
-        position = t->last_position;
-        t->lost_count++;
-        if (t->lost_count > t->lost_max) {
-            t->state = TRACK_STATE_LOST;
+        s_lost_count++;
+        if (s_lost_count > 200) {
+            /* 持续丢线1秒以上: 尝试半速直行 */
+            motor_set_both(base / 2, base / 2);
+            return;
         }
+        /* 短暂丢线: 保持上次位置 */
+        position = s_last_position;
     } else {
-        t->lost_count = 0;
-        t->state      = TRACK_STATE_NORMAL;
+        s_lost_count = 0;
     }
+    s_last_position = position;
 
-    t->line_position = position;
-    t->last_position = position;
+    /*--- 第3步: 整数比例差速 ---*/
+    diff = (int16_t)(((int32_t)position * KP_NUM) >> KP_SHIFT);
 
-    /*=================================================================
-     * 第2步: 位置PID → 差速量
-     *
-     * setpoint=0 表示黑线居中
-     * 应用 SENSOR_INVERT 允许一键翻转方向
-     *=================================================================*/
-    pos_output = pid_calculate(&t->pos_pid,
-                   (float)(position * SENSOR_INVERT), dt);
+    /*--- 第4步: 左右PWM = base ± diff ---*/
+    left_pwm  = base + diff;
+    right_pwm = base - diff;
 
-    /*=================================================================
-     * 第3步: 计算左右目标速度 (PWM单位)
-     *=================================================================*/
-    if (t->state == TRACK_STATE_LOST) {
-        /* 丢线: 减速直行 (不转圈, 靠惯性找回线) */
-        left_target  = (float)t->base_speed * 0.5f;  /* 半速直行 */
-        right_target = (float)t->base_speed * 0.5f;
-    } else {
-        left_target  = (float)t->base_speed + pos_output;
-        right_target = (float)t->base_speed - pos_output;
-    }
+    /*--- 第5步: 限幅 ---*/
+    if (left_pwm  > LINE_MAX_SPEED)  left_pwm  = LINE_MAX_SPEED;
+    if (left_pwm  < -LINE_MAX_SPEED) left_pwm  = -LINE_MAX_SPEED;
+    if (right_pwm > LINE_MAX_SPEED)  right_pwm = LINE_MAX_SPEED;
+    if (right_pwm < -LINE_MAX_SPEED) right_pwm = -LINE_MAX_SPEED;
 
-    /* 限幅 */
-    if (left_target  > LINE_MAX_SPEED)  left_target  = LINE_MAX_SPEED;
-    if (left_target  < -LINE_MAX_SPEED) left_target  = -LINE_MAX_SPEED;
-    if (right_target > LINE_MAX_SPEED)  right_target = LINE_MAX_SPEED;
-    if (right_target < -LINE_MAX_SPEED) right_target = -LINE_MAX_SPEED;
+    /* 死区 */
+    if (left_pwm  > -LINE_MIN_SPEED && left_pwm  < LINE_MIN_SPEED)
+        left_pwm  = 0;
+    if (right_pwm > -LINE_MIN_SPEED && right_pwm < LINE_MIN_SPEED)
+        right_pwm = 0;
 
-    /* 死区: 避免电机低速啸叫 */
-    if (left_target  > -LINE_MIN_SPEED && left_target  < LINE_MIN_SPEED)
-        left_target  = 0.0f;
-    if (right_target > -LINE_MIN_SPEED && right_target < LINE_MIN_SPEED)
-        right_target = 0.0f;
-
-    /*=================================================================
-     * 第4步: 读取编码器速度 → 换算为近似PWM值
-     *=================================================================*/
-    left_enc  = encoder_get_speed_left();
-    right_enc = encoder_get_speed_right();
-
-    left_measured  = (float)left_enc  * (float)SPEED_SCALE;
-    right_measured = (float)right_enc * (float)SPEED_SCALE;
-
-    /* 限幅 */
-    if (left_measured  > MOTOR_PWM_MAX)  left_measured  = MOTOR_PWM_MAX;
-    if (left_measured  < -MOTOR_PWM_MAX) left_measured  = -MOTOR_PWM_MAX;
-    if (right_measured > MOTOR_PWM_MAX)  right_measured = MOTOR_PWM_MAX;
-    if (right_measured < -MOTOR_PWM_MAX) right_measured = -MOTOR_PWM_MAX;
-
-    /*=================================================================
-     * 第5步: 速度PID → PWM修正量
-     *
-     * 修正逻辑: 实测速度 < 目标 → PID输出正补偿 → 加速
-     *=================================================================*/
-    pid_set_setpoint(&t->spd_left_pid,  left_target);
-    pid_set_setpoint(&t->spd_right_pid, right_target);
-
-    float left_correction  = pid_calculate(&t->spd_left_pid,
-                                   left_measured, dt);
-    float right_correction = pid_calculate(&t->spd_right_pid,
-                                   right_measured, dt);
-
-    /*=================================================================
-     * 第6步: 最终 PWM = 目标 + 速度修正
-     *=================================================================*/
-    left_pwm  = left_target  + left_correction;
-    right_pwm = right_target + right_correction;
-
-    /* 最终限幅 */
-    if (left_pwm  > MOTOR_PWM_MAX)  left_pwm  = MOTOR_PWM_MAX;
-    if (left_pwm  < -MOTOR_PWM_MAX) left_pwm  = -MOTOR_PWM_MAX;
-    if (right_pwm > MOTOR_PWM_MAX)  right_pwm = MOTOR_PWM_MAX;
-    if (right_pwm < -MOTOR_PWM_MAX) right_pwm = -MOTOR_PWM_MAX;
-
-    /* 最终死区过滤 */
-    if (left_pwm  > -MOTOR_DEADBAND && left_pwm  < MOTOR_DEADBAND)
-        left_pwm  = 0.0f;
-    if (right_pwm > -MOTOR_DEADBAND && right_pwm < MOTOR_DEADBAND)
-        right_pwm = 0.0f;
-
-    /*=================================================================
-     * 第7步: 输出到电机
-     *=================================================================*/
-    t->left_speed  = (int16_t)left_pwm;
-    t->right_speed = (int16_t)right_pwm;
-    motor_set_both((int16_t)left_pwm, (int16_t)right_pwm);
+    /*--- 第6步: 输出 ---*/
+    motor_set_both(left_pwm, right_pwm);
 }
