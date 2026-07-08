@@ -25,8 +25,7 @@ static uint16_t g_telemetry_cnt = 0;
  *===========================================================================*/
 void uart_pid_init(void)
 {
-    DL_UART_enableInterrupt(PID_UART_INST, DL_UART_INTERRUPT_RX);
-    NVIC_EnableIRQ(PID_UART_INST_INT_IRQN);
+    /* 仅TX, 不启用RX中断 (避免中断干扰主循环) */
     g_rx_idx = 0;
     g_telemetry_cnt = 0;
 
