@@ -29,7 +29,6 @@ void sensor_feed_byte(uint8_t b)
     }
 
     if (b == '!') {
-        /* 帧尾 — 转二进制 */
         for (uint8_t i = 0; i < 12; i++)
             g_binary[i] = (s_buf[i] == '1') ? 1 : 0;
         g_ready = 1;
@@ -40,7 +39,7 @@ void sensor_feed_byte(uint8_t b)
     if ((b == '0' || b == '1') && s_idx < 12)
         s_buf[s_idx++] = b;
     else
-        s_rx = 0;  /* 非法字符→丢弃 */
+        s_rx = 0;
 }
 
 /*===========================================================================
