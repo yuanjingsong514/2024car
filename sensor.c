@@ -64,6 +64,10 @@ void sensor_init(void)
     g_data_ready = 0;
 
     DL_I2C_disableAnalogGlitchFilter(I2C_Sensor_INST);
+
+    /* 启用PB2(SCL)和PB3(SDA)内部上拉 — I2C必须有上拉才能通信 */
+    DL_GPIO_enablePullUp(GPIOB, DL_GPIO_PIN_2);
+    DL_GPIO_enablePullUp(GPIOB, DL_GPIO_PIN_3);
 }
 
 /*===========================================================================
