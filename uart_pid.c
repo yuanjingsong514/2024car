@@ -19,7 +19,8 @@ static uint8_t g_rx_idx = 0;
  *===========================================================================*/
 void uart_pid_init(void)
 {
-    /* 使能 RX 中断 (对齐参考: NVIC_ClearPendingIRQ + NVIC_EnableIRQ) */
+    /* 使能 UART RX 中断 (外设级 + NVIC) */
+    DL_UART_Main_enableInterrupt(PID_UART_INST, DL_UART_MAIN_INTERRUPT_RX);
     NVIC_ClearPendingIRQ(PID_UART_INST_INT_IRQN);
     NVIC_EnableIRQ(PID_UART_INST_INT_IRQN);
     g_rx_idx = 0;
