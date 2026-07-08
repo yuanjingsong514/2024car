@@ -24,7 +24,7 @@ static uint8_t  g_i2c_error_count;    /* I2C连续超时计数 */
  *   400kHz I2C, 7字节 ≈ 7×9bits / 400kHz ≈ 160μs (无stretch)
  *   留100倍余量: 16000μs ≈ 500,000 cycles @32MHz
  *===========================================================================*/
-#define I2C_TIMEOUT_CYCLES  500000   /* ~16ms 超时 */
+#define I2C_TIMEOUT_CYCLES  10000    /* ~300μs/byte, 足够400kHz I2C+时钟拉伸 */
 
 static bool read_iic(void)
 {

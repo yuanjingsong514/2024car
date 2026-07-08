@@ -27,7 +27,7 @@ int main(void)
     /*--- 第3步: 循迹初始化 ---*/
     line_track_init();
 
-    /*--- 第4步: 主循环 — 用 delay_cycles 做节拍, 不依赖定时器 ---*/
+    /*--- 第4步: 主循环 — 传感器循迹 ---*/
     while (1) {
         line_track_run();
         delay_cycles(CPUCLK_FREQ / 200);   /* 5ms */
