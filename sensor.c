@@ -99,5 +99,82 @@ uint8_t sensor_get_raw(uint8_t idx)
 }
 
 int16_t sensor_get_last_position(void) { return g_last_position; }
-bool sensor_is_cross(void) { return false; }
+bool sensor_is_cross(void) { return (sensor_get_black_count() >= 6); }
 bool sensor_is_lost(void)  { return (sensor_get_black_count() == 0); }
+
+/*===========================================================================
+ * 路口检测器
+ *===========================================================================*/
+void junction_detector_init(junction_detector_t *jd,
+                            uint8_t black_thresh,
+                            uint8_t confirm_thresh,
+                            uint16_t cooldown)
+{
+    jd->confirm_count     = 0;
+    jd->confirm_threshold = confirm_thresh;
+    jd->black_threshold   = black_thresh;
+    jd->cooldown_counter  = 0;
+    jd->cooldown_period   = cooldown;
+    jd->active            = false;
+}
+
+bool junction_detector_update(junction_detector_t *jd)
+{
+    jd->active = false;
+    uint8_t black_cnt = sensor_get_black_count();
+
+    /* 冷却递减 */
+    if (jd->cooldown_counter > 0) {
+        jd->cooldown_counter--;
+        return false;
+    }
+
+    /* 检测: 黑点数超阈值 → 累加确认计数 */
+    if (black_cnt >= jd->black_threshold) {
+        jd->confirm_count++;
+        if (jd->confirm_count >= jd->confirm_threshold) {
+            jd->active = true;
+            jd->cooldown_counter = jd->cooldown_period;
+            jd->confirm_count = 0;
+            return true;
+        }
+    } else {
+        /* 低于阈值 → 递减确认计数 (迟滞) */
+        if (jd->confirm_count > 0) jd->confirm_count--;
+    }
+    return false;
+}
+
+void junction_detector_reset(junction_detector_t *jd)
+{
+    jd->confirm_count    = 0;
+    jd->cooldown_counter = 0;
+    jd->active           = false;
+}
+
+/*===========================================================================
+ * 分叉方向判断
+ *===========================================================================*/
+uint8_t sensor_get_black_left(void)
+{
+    uint8_t i, n = 0;
+    for (i = 0; i < 6; i++) if (g_binary[i]) n++;
+    return n;
+}
+
+uint8_t sensor_get_black_right(void)
+{
+    uint8_t i, n = 0;
+    for (i = 6; i < 12; i++) if (g_binary[i]) n++;
+    return n;
+}
+
+int8_t sensor_junction_side(void)
+{
+    uint8_t left  = sensor_get_black_left();
+    uint8_t right = sensor_get_black_right();
+
+    if (left >= 5 && right <= 2)  return -1;   /* 左边多 → 分叉在左 */
+    if (right >= 5 && left <= 2)  return  1;   /* 右边多 → 分叉在右 */
+    return 0;                                   /* 居中或全部黑 */
+}

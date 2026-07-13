@@ -31,14 +31,13 @@ const GPIO18 = GPIO.addInstance();
 const GPIO19 = GPIO.addInstance();
 const GPIO20 = GPIO.addInstance();
 const GPIO21 = GPIO.addInstance();
-const I2C    = scripting.addModule("/ti/driverlib/I2C", {}, false);
-const I2C1   = I2C.addInstance();
 const PWM    = scripting.addModule("/ti/driverlib/PWM", {}, false);
 const PWM1   = PWM.addInstance();
 const PWM2   = PWM.addInstance();
 const SYSCTL = scripting.addModule("/ti/driverlib/SYSCTL");
 const UART   = scripting.addModule("/ti/driverlib/UART", {}, false);
 const UART1  = UART.addInstance();
+const UART2  = UART.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -170,40 +169,26 @@ GPIO21.associatedPins[0].direction           = "INPUT";
 GPIO21.associatedPins[0].assignedPortSegment = "Upper";
 GPIO21.associatedPins[0].pin.$assign         = "PB22";
 
-I2C1.$name                             = "I2C_Sensor";
-I2C1.basicEnableController             = true;
-I2C1.basicControllerStandardBusSpeed   = "Fast";
-I2C1.peripheral.sdaPin.$assign         = "PB3";
-I2C1.peripheral.sclPin.$assign         = "PB2";
-I2C1.sdaPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric4";
-I2C1.sdaPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-I2C1.sdaPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-I2C1.sdaPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-I2C1.sclPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric5";
-I2C1.sclPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-I2C1.sclPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-I2C1.sclPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-
 PWM1.$name                              = "MotorPWM_Left";
 PWM1.timerCount                         = 1600;
 PWM1.ccIndex                            = [0];
 PWM1.PWM_CHANNEL_0.$name                = "ti_driverlib_pwm_PWMTimerCC0";
-PWM1.ccp0PinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric0";
 PWM1.ccp0PinConfig.direction            = scripting.forceWrite("OUTPUT");
 PWM1.ccp0PinConfig.hideOutputInversion  = scripting.forceWrite(false);
 PWM1.ccp0PinConfig.onlyInternalResistor = scripting.forceWrite(false);
 PWM1.ccp0PinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+PWM1.ccp0PinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric0";
 PWM1.peripheral.ccp0Pin.$assign         = "PA29";
 
 PWM2.$name                              = "MotorPWM_Right";
 PWM2.timerCount                         = 1600;
 PWM2.ccIndex                            = [0];
 PWM2.PWM_CHANNEL_0.$name                = "ti_driverlib_pwm_PWMTimerCC1";
-PWM2.ccp0PinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric1";
 PWM2.ccp0PinConfig.direction            = scripting.forceWrite("OUTPUT");
 PWM2.ccp0PinConfig.hideOutputInversion  = scripting.forceWrite(false);
 PWM2.ccp0PinConfig.onlyInternalResistor = scripting.forceWrite(false);
 PWM2.ccp0PinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+PWM2.ccp0PinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric1";
 PWM2.peripheral.ccp0Pin.$assign         = "PA7";
 
 SYSCTL.forceDefaultClkConfig = true;
@@ -212,15 +197,29 @@ UART1.$name                            = "PID_UART";
 UART1.targetBaudRate                   = 115200;
 UART1.peripheral.rxPin.$assign         = "PB7";
 UART1.peripheral.txPin.$assign         = "PB6";
-UART1.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 UART1.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
 UART1.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 UART1.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART1.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric3";
+UART1.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 UART1.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 UART1.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric3";
+
+UART2.$name                            = "UART_61";
+UART2.targetBaudRate                   = 115200;
+UART2.peripheral.rxPin.$assign         = "PB3";
+UART2.peripheral.txPin.$assign         = "PB2";
+UART2.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric6";
+UART2.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
+UART2.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART2.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART2.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+UART2.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric7";
+UART2.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART2.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART2.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
@@ -230,8 +229,8 @@ UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 Board.peripheral.$suggestSolution          = "DEBUGSS";
 Board.peripheral.swclkPin.$suggestSolution = "PA20";
 Board.peripheral.swdioPin.$suggestSolution = "PA19";
-I2C1.peripheral.$suggestSolution           = "I2C1";
 PWM1.peripheral.$suggestSolution           = "TIMG6";
 PWM2.peripheral.$suggestSolution           = "TIMG8";
 SYSCTL.peripheral.$suggestSolution         = "SYSCTL";
 UART1.peripheral.$suggestSolution          = "UART1";
+UART2.peripheral.$suggestSolution          = "UART3";
